@@ -2,57 +2,46 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
 import pandas as pd
-import os
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests from React
+CORS(app)
 
-# Load the pre-trained model and columns
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(BASE_DIR, "stroke_model.pkl")
-columns_path = os.path.join(BASE_DIR, "columns.pkl")
+model = joblib.load("new_model.pkl")
 
-model = joblib.load(model_path)
-original_cols = joblib.load(columns_path)
+# Label encoding mappings (MUST match training exactly)
+label_encoders = {
+    "gender": {"Female": 0, "Male": 1, "Other": 2},
+    "ever_married": {"No": 0, "Yes": 1},
+    "work_type": {"Govt_job": 0, "Never_worked": 1, "Private": 2, "Self-employed": 3, "children": 4},
+    "Residence_type": {"Rural": 0, "Urban": 1},
+    "smoking_status": {"Unknown": 0, "formerly smoked": 1, "never smoked": 2, "smokes": 3}
+}
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Get JSON data from React
         data = request.get_json()
         print("Received from frontend:", data)
 
-        input_dict = {
-        'gender': [data['gender']],
-        'age': [float(data['age'])],
-        'hypertension': [int(data['hypertension'])],
-        'heart_disease': [int(data['heart_disease'])],
-        'ever_married': [data['ever_married']],
-        'work_type': [data['work_type']],
-        'Residence_type': [data['Residence_type']],
-        'avg_glucose_level': [float(data['avg_glucose_level'])],
-        'bmi': [float(data['bmi'])],
-        'smoking_status': [data['smoking_status']]
-        }
-        # Convert to DataFrame
-        input_df = pd.DataFrame(input_dict)
+        # Encode categorical variables using mappings
+        for col, mapping in label_encoders.items():
+            data[col] = mapping[data[col]]
 
-        # One-hot encode same as during training
-        input_encoded = pd.get_dummies(input_df, drop_first=True)
-
-        # Align columns to what the model expects
-        input_encoded = input_encoded.reindex(columns=original_cols, fill_value=0)
+        # Create DataFrame with correct column order
+        input_df = pd.DataFrame([data], columns=[
+            "gender", "age", "hypertension", "heart_disease",
+            "ever_married", "work_type", "Residence_type",
+            "avg_glucose_level", "bmi", "smoking_status"
+        ])
 
         # Predict
-        prediction = model.predict(input_encoded)[0]
-        result = "Stroke Risk Detected" if prediction == 1 else "No Stroke Risk Dtetected"
+        prediction = model.predict(input_df)[0]
+        result = "Stroke Risk Detected" if prediction == 1 else "No Stroke Risk Detected"
 
-
-        # Just return a test message to confirm connection
         return jsonify({'result': result})
-    
+
     except Exception as e:
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
