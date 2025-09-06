@@ -71,7 +71,7 @@ def predict():
         return jsonify({"result": result, "probability": probability})
 
     except Exception as e:
-        print("❌ Prediction error:", e)
+        print("❌ There was a Prediction error:", e)
         return jsonify({"error": str(e)})
 
 
